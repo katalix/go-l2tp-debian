@@ -1,0 +1,209 @@
+Source: go-l2tp
+Maintainer: Debian Go Packaging Team <team+pkg-go@tracker.debian.org>
+Uploaders: Tom Parkin <tparkin@katalix.com>
+Section: golang
+Testsuite: autopkgtest-pkg-go
+Priority: optional
+Build-Depends: debhelper-compat (= 13),
+               dh-golang,
+               golang-any,
+               golang-github-go-kit-kit-dev,
+               golang-github-mdlayher-genetlink-dev,
+               golang-github-mdlayher-netlink-dev,
+               golang-github-pelletier-go-toml-dev,
+               golang-golang-x-sys-dev
+Standards-Version: 4.6.0
+Vcs-Browser: https://salsa.debian.org/go-team/packages/go-l2tp
+Vcs-Git: https://salsa.debian.org/go-team/packages/go-l2tp.git
+Homepage: https://github.com/katalix/go-l2tp
+Rules-Requires-Root: no
+XS-Go-Import-Path: github.com/katalix/go-l2tp
+
+Package: go-l2tp
+Architecture: any
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Built-Using: ${misc:Built-Using}
+Description: Go library for building L2TP applications on Linux systems (program)
+ go-l2tp
+ .
+ **go-l2tp** is suite of Go libraries for building L2TP
+ (https://en.wikipedia.org/wiki/Layer_2_Tunneling_Protocol) applications
+ on Linux systems.
+ .
+ Features
+ .
+  * L2TPv2 (RFC2661) (https://tools.ietf.org/html/rfc2661) and L2TPv3
+    (RFC3931) (https://tools.ietf.org/html/rfc3931) data plane via. Linux
+    L2TP subsystem
+  * AF_INET and AF_INET6 tunnel addresses
+  * UDP and L2TPIP tunnel encapsulation
+  * L2TPv2 control plane in client/LAC mode
+  * PPPoE (RFC2561) (https://tools.ietf.org/html/rfc2516) control and
+    data plane via. Linux L2TP subsystem.
+ .
+ Installation
+ .
+ If you're familiar with Go, you can skip this section.
+ .
+ Prior to installing go-l2tp, install the Go language distribution
+ (https://golang.org/dl/) which includes the compiler and other tooling
+ required to install Go programs. Please follow the instructions from the
+ Go project to get your installation up and running.
+ .
+ You can now install go-l2tp as follows:
+ .
+   go install github.com/katalix/go-l2tp/...@latest
+ .
+ Read on for instructions on coding using the library.
+ .
+ Import
+ .
+   import (
+       "github.com/katalix/go-l2tp/l2tp"
+       "github.com/katalix/go-l2tp/pppoe"
+       "github.com/katalix/go-l2tp/config"
+   )
+ .
+ Usage
+ .
+   # Note we're ignoring errors for brevity.
+ .
+   # Read configuration using the config package.
+   # This is optional: you can build your own configuration
+   # structures if you prefer.
+   config, _ := config.LoadFile("./my-l2tp-config.toml")
+ .
+   # Creation of L2TP instances requires an L2TP context.
+   # We're disabling logging and using the default Linux data plane.
+   l2tpctx, _ := l2tp.NewContext(l2tp.LinuxNetlinkDataPlane, nil)
+ .
+   # Create tunnel and session instances based on the config
+   for _, tcfg := range config.Tunnels {
+       tunl, _ := l2tpctx.NewStaticTunnel(tcfg.Name, tcfg.Config)
+           for _, scfg := range tcfg.Sessions {
+               _, _, := tunl.NewSession(scfg.Name, scfg.Config)
+           }
+   }
+ .
+ Tools
+ .
+ go-l2tp includes three tools which build on the library.
+ .
+ ql2tpd
+ .
+ **ql2tpd** is a minimal daemon for creating static L2TPv3 sessions.
+ .
+ This tool requires root permissions to run, and is driven by a
+ configuration file which details the tunnel and session instances to
+ create.
+ .
+ Each tunnel may run as a purely static instance.  In this mode
+ **ql2tpd** represents a more convenient way to bring up static sessions
+ than **ip l2tp** commands.
+ .
+ If a tunnel has a *hello_timeout* set, the tunnel will send a periodic
+ keep-alive packet over a minimal implementation of the RFC3931 reliable
+ control message transport. This allows for the detection of tunnel
+ failure, which will then tear down the sessions running in that tunnel.
+ *hello_timeout* should only be enabled if the peer is also running
+ **ql2tpd**.
+ .
+ kl2tpd
+ .
+ **kl2tpd** is a client/LAC-mode daemon for creating L2TPv2 sessions.  It
+ spawns the standard Linux **pppd** for PPP protocol support.
+ .
+ Similar to **ql2tpd**, **kl2tpd** requires root permissions to run, and
+ is driven by a configuration file which details the tunnel and session
+ instances to create.
+ .
+ In addition to the configuration parameters documented by package
+ config, **kl2tpd** supports an extra session parameter, *pppd_args*
+ which calls out an argument file for extra **pppd** command line
+ arguments.  Here is an example configuration for establishing a single
+ tunnel containing a single session:
+ .
+   [tunnel.t1]
+   peer = "42.102.77.204:1701"
+   version = "l2tpv2"
+   encap = "udp"
+ .
+   [tunnel.t1.session.s1]
+   pseudowire = "ppp"
+   pppd_args = "/home/bob/pppd.args"
+ .
+ kpppoed
+ .
+ **kpppoed** is a PPPoE daemon for creating L2TPv2 Access Concentrator
+ sessions in response to PPPoE requests.  It spawns **kl2tpd** for L2TP
+ protocol support.
+ .
+ **kpppoed** uses a minimal configuration file format which calls out the
+ interface to listen on for PPPoE packets, the list of PPPoE services to
+ offer, and the IP address of the LNS to use for establishing L2TPv2
+ sessions.  Here is an example configuration:
+ .
+   ac_name = "kpppoed-1.0"
+   interface_name = "eth0"
+   services = [ "myservice" ]
+   lns_ipaddr = "192.168.1.69:1701"
+ .
+ Documentation
+ .
+ The go-l2tp library and tools are documented using Go's documentation
+ tool.  A top-level description of the various libraries can be viewed as
+ follows:
+ .
+   go doc l2tp
+   go doc pppoe
+   go doc config
+ .
+ This top level document provides a summary of the main APIs the library
+ exposes.
+ .
+ You can view documentation of a particular API or type like this:
+ .
+   go doc l2tp.Context
+ .
+ Finally, documentation of various commands like this:
+ .
+   go doc cmd/ql2tpd
+   go doc cmd/kl2tpd
+   go doc cmd/kpppoed
+ .
+ Testing
+ .
+ go-l2tp has unit tests which can be run using go test:
+ .
+   go test ./...
+ .
+ Some tests instantiate tunnels and sessions in the Linux kernel's L2TP
+ subsystem, and hence require root permissions to run.  By default these
+ tests are skipped if run as a normal user.
+ .
+ The tests requiring root can be run as follows:
+ .
+   go test -exec sudo -run TestRequiresRoot ./...
+ .
+ The tests are run using *sudo*, which will need to be set up for your
+ user, and require the Linux kernel L2TP modules to be loaded.
+ .
+ For the l2tp library tests:
+ .
+   modprobe l2tp_core l2tp_netlink l2tp_eth l2tp_ip l2tp_ip6
+ .
+ And for the pppoe library tests:
+ .
+   modprobe l2tp_ac_pppoe
+ .
+ Depending on your Linux distribution it may be necessary to install an
+ extra package to get the L2TP subsystem modules.  For example on Ubuntu:
+ .
+   sudo apt-get install linux-modules-extra-$(uname -r)
+ .
+ The script *runtests.sh* automates running all the tests (both those
+ requiring root and not) and generates a html test coverage report:
+ .
+   ./runtests.sh && firefox ./coverage.html
+
